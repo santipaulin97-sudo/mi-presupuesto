@@ -1164,11 +1164,12 @@ async function renderHistorico(){
     </tr>`;
   }).join('');
 }
-  // ═══════════════════════════════════════════════════════════════════════════
-// BOT ENGINE v3.0 — SUPABASE VERSION
+// ═══════════════════════════════════════════════════════════════════════════
+// BOT ENGINE v3.0 — SUPABASE + NLP COMPLETO
 // ═══════════════════════════════════════════════════════════════════════════
 
 let botOpen = false;
+let botContext = { lastIntent: null, lastCat: null };
 
 function toggleBot(){
   botOpen = !botOpen;
@@ -1179,27 +1180,46 @@ function toggleBot(){
     if(!document.getElementById('bot-messages').children.length) botWelcome();
   }
 }
-
 function clearBotChat(){
   document.getElementById('bot-messages').innerHTML = '';
+  botContext = { lastIntent: null, lastCat: null };
   botWelcome();
 }
 
 function botWelcome(){
   const hour = new Date().getHours();
   const saludo = hour < 12 ? 'Buen día' : hour < 19 ? 'Buenas tardes' : 'Buenas noches';
-  addBotMsg(`${saludo}, <strong>${userName}</strong>! 👋<br><br>Soy tu asistente financiero. Preguntame lo que quieras.<br><br><span style="color:var(--muted);font-size:12px;">Probá: "¿cuánto gasté?", "balance", "top gastos", "tip"</span>`, 'bot');
-  updateSuggestions();
+  addBotMsg(`${saludo}, <strong>${userName}</strong>! 👋<br><br>Soy tu asistente financiero. Consultame lo que quieras sobre tus finanzas.<br><br><span style="color:var(--muted);font-size:12px">Probá preguntarme algo o usá los botones de abajo ↓</span>`, 'bot');
+  updateSuggestions('home');
 }
 
-function updateSuggestions(){
-  document.getElementById('bot-suggestions').innerHTML = [
-    ['💸 Gastos','¿Cuánto gasté?'],
-    ['📊 Balance','¿Cuál es mi balance?'],
-    ['🏆 Top','¿En qué gasto más?'],
-    ['🔮 Proyección','¿Cuánto me queda por día?'],
-    ['💡 Tip','Dame un consejo'],
-  ].map(([l,q])=>`<button class="bot-chip" onclick="botAsk('${q}')">${l}</button>`).join('');
+function updateSuggestions(ctx){
+  const el = document.getElementById('bot-suggestions');
+  const chips = {
+    home: [
+      ['💸 ¿Cuánto gasté?','¿Cuánto gasté este mes?'],
+      ['📊 Balance','¿Cuál es mi balance?'],
+      ['🏆 Top gastos','¿En qué gasto más?'],
+      ['🏦 Ahorro','¿Cuánto ahorré?'],
+      ['🔮 Proyección','¿Cuánto me queda por día?'],
+      ['🎯 Metas','¿Cómo van mis metas?'],
+      ['💡 Tip','Dame un consejo financiero'],
+    ],
+    gastos: [
+      ['🍔 Alimentación','¿Cuánto gasté en comida?'],
+      ['🏠 Vivienda','¿Cuánto gasté en vivienda?'],
+      ['🚗 Transporte','¿Cuánto gasté en transporte?'],
+      ['⛽ Nafta','¿Cuánto gasté en nafta?'],
+      ['📊 Ranking','¿En qué gasto más?'],
+      ['◀ Volver','ayuda'],
+    ],
+    compare: [
+      ['May vs Jun','Comparame mayo vs junio'],
+      ['Jun vs Jul','Comparame junio vs julio'],
+      ['◀ Volver','ayuda'],
+    ],
+  };
+  el.innerHTML = (chips[ctx]||chips.home).map(([l,q])=>`<button class="bot-chip" onclick="botAsk('${q}')">${l}</button>`).join('');
 }
 
 function botAsk(text){ document.getElementById('bot-input').value=text; sendBot(); }
@@ -1215,7 +1235,7 @@ function sendBot(){
   typing.className='bot-msg bot-msg-bot';typing.id='bot-typing';
   typing.innerHTML='<div class="bot-bubble"><div class="bot-typing"><span></span><span></span><span></span></div></div>';
   msgs.appendChild(typing);msgs.scrollTop=msgs.scrollHeight;
-  setTimeout(async()=>{typing.remove();const r=await processBot(text);addBotMsg(r,'bot');},400+Math.random()*400);
+  setTimeout(async()=>{typing.remove();const r=await processBot(text);addBotMsg(r,'bot');},350+Math.random()*450);
 }
 
 function addBotMsg(html,type){
@@ -1226,9 +1246,78 @@ function addBotMsg(html,type){
   msgs.appendChild(div);msgs.scrollTop=msgs.scrollHeight;
 }
 
+// ── NLP HELPERS ──
+function norm(t){return t.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[¿?¡!.,;:()]/g,'').trim();}
+
+const MMAP={'enero':0,'febrero':1,'marzo':2,'abril':3,'mayo':4,'junio':5,'julio':6,'agosto':7,'septiembre':8,'octubre':9,'noviembre':10,'diciembre':11,'ene':0,'feb':1,'mar':2,'abr':3,'may':4,'jun':5,'jul':6,'ago':7,'sep':8,'oct':9,'nov':10,'dic':11};
+
+const CALIAS={
+  'comida':'Alimentación','alimento':'Alimentación','alimentacion':'Alimentación','super':'Alimentación','supermercado':'Alimentación',
+  'alquiler':'Vivienda','vivienda':'Vivienda','depto':'Vivienda',
+  'expensas':'Expensas',
+  'transporte':'Transporte','colectivo':'Transporte','uber':'Transporte','subte':'Transporte','taxi':'Transporte',
+  'combustible':'Combustible','nafta':'Combustible','gasolina':'Combustible','ypf':'Combustible','shell':'Combustible',
+  'seguros':'Seguros','seguro':'Seguros',
+  'salud':'Salud','medico':'Salud','farmacia':'Salud','prepaga':'Salud','osde':'Salud',
+  'educacion':'Educación','curso':'Educación','universidad':'Educación',
+  'entretenimiento':'Entretenimiento','ocio':'Entretenimiento','salida':'Entretenimiento','cine':'Entretenimiento','bar':'Entretenimiento',
+  'plataformas':'Plataformas','streaming':'Plataformas','spotify':'Plataformas','netflix':'Plataformas',
+  'ropa':'Ropa','zapatillas':'Ropa',
+  'servicios':'Servicios','luz':'Servicios','internet':'Servicios','telefono':'Servicios','celular':'Servicios',
+  'sueldo':'Sueldo','salario':'Sueldo',
+  'aguinaldo':'Aguinaldo','sac':'Aguinaldo',
+  'inversiones':'Inversiones','inversion':'Inversiones','plazo fijo':'Inversiones','fci':'Inversiones',
+  'freelance':'Freelance',
+  'bonus':'Bonus','bono':'Bonus',
+  'ahorro':'Ahorro','ahorros':'Ahorro',
+};
+
+function detectMonth(text){
+  const n=norm(text);
+  if(n.includes('este mes')||n.includes('mes actual'))return{m:curMonth,y:curYear};
+  if(n.includes('mes pasado')||n.includes('mes anterior')){let m=curMonth-1,y=curYear;if(m<0){m=11;y--;}return{m,y};}
+  for(const[name,idx]of Object.entries(MMAP)){if(n.includes(name))return{m:idx,y:curYear};}
+  return{m:curMonth,y:curYear};
+}
+
+function detectCat(text){
+  const n=norm(text);
+  const sorted=Object.entries(CALIAS).sort((a,b)=>b[0].length-a[0].length);
+  for(const[alias,cat]of sorted){if(n.includes(alias))return cat;}
+  return null;
+}
+
+async function getBotTxs(m,y){
+  if(m===curMonth&&y===curYear) return cachedTxs;
+  return await loadTxs(m,y);
+}
+
+const f$=n=>fmtFull(n);
+const fU=n=>fmtUSD(n);
+
+// ── SMART TIPS ──
+function getSmartTip(ti,te,ts){
+  const pct=ti>0?(te/ti*100):0;
+  const savRate=ti>0?(ts/ti*100):0;
+  const tips=[];
+  if(pct>90) tips.push('🚨 Usás más del 90% de tus ingresos. Revisá gastos no esenciales como entretenimiento o plataformas.');
+  if(pct>70&&pct<=90) tips.push('⚠️ Llevás un 70-90% de consumo. Intentá frenar gastos discrecionales los últimos días.');
+  if(savRate<10&&ti>0) tips.push('💡 Tu tasa de ahorro es menor al 10%. La regla 50/30/20 sugiere ahorrar al menos un 20%.');
+  if(savRate>=20) tips.push('🏆 ¡Excelente! Ahorrás más del 20% de tus ingresos. Sos un crack financiero.');
+  if(te===0&&ti>0) tips.push('✨ No registraste gastos este mes. ¡Perfecto o te falta cargar datos! 😄');
+  if(pct<50&&ti>0) tips.push('🏆 Excelente control — usás menos del 50%. Seguí así.');
+  if(ts===0&&ti>0) tips.push('💡 No registraste ahorro este mes. Tratá de separar aunque sea un 10% del ingreso.');
+  if(!tips.length) tips.push('✨ Tus finanzas se ven estables. Seguí así y revisá tus metas al cierre del mes.');
+  return tips[Math.floor(Math.random()*tips.length)];
+}
+
+// ── PROCESS QUERY ──
 async function processBot(text){
-  const n=text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[¿?¡!.,]/g,'');
-  const txs=cachedTxs;
+  const n=norm(text);
+  const{m,y}=detectMonth(text);
+  const cat=detectCat(text);
+  const txs=await getBotTxs(m,y);
+  const mn=MONTHS[m]+' '+y;
   const inc=txs.filter(t=>t.type==='income');
   const exp=txs.filter(t=>t.type==='expense');
   const sav=txs.filter(t=>t.type==='saving');
@@ -1236,80 +1325,163 @@ async function processBot(text){
   const te=exp.reduce((s,t)=>s+Number(t.amount),0);
   const ts=sav.reduce((s,t)=>s+Number(t.amount),0);
   const bal=ti-te;
-  const mn=MONTHS[curMonth]+' '+curYear;
 
-  // Balance
-  if(n.includes('balance')||n.includes('saldo')||(n.includes('como')&&n.includes('estoy'))){
-    return `📊 <strong>Balance — ${mn}</strong><br><br>💵 Ingresos: <span style="color:var(--green);font-weight:700">${fmtFull(ti)}</span><br>🔴 Gastos: <span style="color:var(--red);font-weight:700">${fmtFull(te)}</span><br>📈 Balance: <span style="color:${bal>=0?'var(--blue)':'var(--red)'};font-weight:700">${fmtFull(bal)}</span> (${fmtUSD(bal)})<br>🏦 Ahorro: <span style="color:var(--teal);font-weight:700">${fmtFull(ts)}</span><br><br>${bal>=0?'✅ Superávit':'⚠️ Déficit'}`;
+  // ── TIP ──
+  if(n.includes('tip')||n.includes('consejo')||n.includes('sugerencia')||n.includes('recomienda')){
+    updateSuggestions('home');
+    return `💡 <strong>Tip financiero</strong><br><br>${getSmartTip(ti,te,ts)}`;
   }
 
-  // Gastos totales
+  // ── METAS ──
+  if(n.includes('meta')||n.includes('limite')||n.includes('techo')){
+    const goals=await loadGoals();
+    const expGrp=exp.reduce((a,t)=>{a[t.category]=(a[t.category]||0)+Number(t.amount);return a;},{});
+    const catsWithGoal=EXP_CATS.filter(c=>goals[c]);
+    if(!catsWithGoal.length) return '🎯 No tenés metas configuradas. Andá a la pestaña <strong>Metas</strong> para definir topes.';
+    let over=[],near=[],ok=[];
+    catsWithGoal.forEach(c=>{
+      const spent=expGrp[c]||0,budget=goals[c],pct=Math.round(spent/budget*100);
+      const item=`• ${c}: ${f$(spent)} de ${f$(budget)} (<span style="color:${pct>=100?'var(--red)':pct>=80?'var(--amber)':'var(--green)'};font-weight:700">${pct}%</span>)`;
+      if(pct>=100)over.push(item);else if(pct>=80)near.push(item);else ok.push(item);
+    });
+    let resp=`🎯 <strong>Metas — ${mn}</strong><br><br>`;
+    if(over.length)resp+=`🚨 <strong>Superadas:</strong><br>${over.join('<br>')}<br><br>`;
+    if(near.length)resp+=`⚠️ <strong>Cerca del límite:</strong><br>${near.join('<br>')}<br><br>`;
+    if(ok.length)resp+=`✅ <strong>Bajo control:</strong><br>${ok.join('<br>')}<br>`;
+    updateSuggestions('home');
+    return resp;
+  }
+
+  // ── BALANCE ──
+  if(n.includes('balance')||n.includes('saldo')||(n.includes('como')&&(n.includes('estoy')||n.includes('voy')))){
+    updateSuggestions('home');
+    return `📊 <strong>Balance — ${mn}</strong><br><br>💵 Ingresos: <span style="color:var(--green);font-weight:700">${f$(ti)}</span> <span style="color:var(--muted);font-size:12px">(${fU(ti)})</span><br>🔴 Gastos: <span style="color:var(--red);font-weight:700">${f$(te)}</span> <span style="color:var(--muted);font-size:12px">(${fU(te)})</span><br>📈 Balance: <span style="color:${bal>=0?'var(--blue)':'var(--red)'};font-weight:700">${f$(bal)}</span> <span style="color:var(--muted);font-size:12px">(${fU(bal)})</span><br>🏦 Ahorro: <span style="color:var(--teal);font-weight:700">${f$(ts)}</span><br><br>${bal>=0?'✅ Superávit — vas bien.':'⚠️ Déficit — cuidado con los gastos.'}${ti>0?`<br><span style="color:var(--muted);font-size:12px">Tasa ahorro: ${(ts/ti*100).toFixed(1)}% · Consumo: ${(te/ti*100).toFixed(1)}%</span>`:''}`;
+  }
+
+  // ── GASTO POR CATEGORÍA ──
+  if(cat&&(n.includes('gast')||n.includes('cuanto')||n.includes('pague'))){
+    const ce=exp.filter(t=>t.category===cat);
+    const ct=ce.reduce((s,t)=>s+Number(t.amount),0);
+    if(!ce.length)return `No tenés gastos en <strong>${cat}</strong> para ${mn}. 📭`;
+    const pct=te>0?((ct/te)*100).toFixed(1):'0';
+    const items=ce.slice(0,8).map(t=>`  • ${t.description}: <span style="color:var(--red);font-weight:700">${f$(Number(t.amount))}</span>`).join('<br>');
+    const more=ce.length>8?`<br><span style="color:var(--muted);font-size:12px">...y ${ce.length-8} más</span>`:'';
+    botContext.lastCat=cat;
+    updateSuggestions('gastos');
+    return `📂 <strong>${cat}</strong> — ${mn}<br><br>💰 Total: <span style="color:var(--red);font-weight:700">${f$(ct)}</span> <span style="color:var(--muted);font-size:12px">(${pct}% del gasto, ${fU(ct)})</span><br>📝 ${ce.length} registro${ce.length>1?'s':''}:<br>${items}${more}`;
+  }
+
+  // ── INGRESO POR CATEGORÍA ──
+  if(cat&&(n.includes('ingres')||n.includes('cobre')||n.includes('recibi'))){
+    const ci=inc.filter(t=>t.category===cat);
+    const ct=ci.reduce((s,t)=>s+Number(t.amount),0);
+    if(!ci.length)return `No tenés ingresos de <strong>${cat}</strong> en ${mn}. 📭`;
+    const items=ci.map(t=>`  • ${t.description}: <span style="color:var(--green);font-weight:700">${f$(Number(t.amount))}</span>`).join('<br>');
+    updateSuggestions('home');
+    return `💵 <strong>${cat}</strong> — ${mn}<br><br>Total: <span style="color:var(--green);font-weight:700">${f$(ct)}</span> <span style="color:var(--muted);font-size:12px">(${fU(ct)})</span><br>${items}`;
+  }
+
+  // ── TOTAL GASTOS ──
   if(n.includes('gast')||n.includes('cuanto llevo')){
-    if(!exp.length) return `No hay gastos en ${mn}. ✨`;
+    if(!exp.length)return `No hay gastos en ${mn}. ✨`;
     const grp=exp.reduce((a,t)=>{a[t.category]=(a[t.category]||0)+Number(t.amount);return a;},{});
     const top=Object.entries(grp).sort((a,b)=>b[1]-a[1]).slice(0,6);
-    const topStr=top.map(([c,v])=>`  • ${c}: <span style="color:var(--red);font-weight:700">${fmtFull(v)}</span> (${(v/te*100).toFixed(0)}%)`).join('<br>');
-    return `🔴 <strong>Gastos — ${mn}</strong><br><br>Total: <span style="color:var(--red);font-weight:700">${fmtFull(te)}</span> (${fmtUSD(te)})<br>${exp.length} registros · Promedio: ${fmtFull(te/exp.length)}<br><br>🏆 Por categoría:<br>${topStr}`;
+    const topStr=top.map(([c,v])=>`  • ${c}: <span style="color:var(--red);font-weight:700">${f$(v)}</span> (${(v/te*100).toFixed(0)}%)`).join('<br>');
+    updateSuggestions('gastos');
+    return `🔴 <strong>Gastos — ${mn}</strong><br><br>Total: <span style="color:var(--red);font-weight:700">${f$(te)}</span> <span style="color:var(--muted);font-size:12px">(${fU(te)})</span><br>${exp.length} transacciones · Promedio: ${f$(te/exp.length)}<br><br>🏆 Por categoría:<br>${topStr}`;
   }
 
-  // Top/ranking
+  // ── TOTAL INGRESOS ──
+  if(n.includes('ingres')||n.includes('cobre')||n.includes('gane')){
+    if(!inc.length)return `No hay ingresos en ${mn}. 📭`;
+    const items=inc.map(t=>`  • ${t.description} (${t.category}): <span style="color:var(--green);font-weight:700">${f$(Number(t.amount))}</span>`).join('<br>');
+    updateSuggestions('home');
+    return `💵 <strong>Ingresos — ${mn}</strong><br><br>Total: <span style="color:var(--green);font-weight:700">${f$(ti)}</span> <span style="color:var(--muted);font-size:12px">(${fU(ti)})</span><br>${inc.length} registro${inc.length>1?'s':''}<br><br>${items}`;
+  }
+
+  // ── AHORRO ──
+  if(n.includes('ahorr')||n.includes('saving')){
+    if(n.includes('ano')||n.includes('acumulado')||n.includes('total')){
+      let ytd=0,months=0;
+      for(let i=11;i>=0;i--){
+        let mm=curMonth-i,yy=curYear;while(mm<0){mm+=12;yy--;}
+        const t=await getBotTxs(mm,yy);
+        const s=t.filter(x=>x.type==='saving').reduce((a,x)=>a+Number(x.amount),0);
+        if(s>0){ytd+=s;months++;}
+      }
+      updateSuggestions('home');
+      return `🏦 <strong>Ahorro acumulado (12 meses)</strong><br><br>Total: <span style="color:var(--teal);font-weight:700">${f$(ytd)}</span> <span style="color:var(--muted);font-size:12px">(${fU(ytd)})</span><br>${months} meses con ahorro · Promedio: ${f$(months?ytd/months:0)}/mes`;
+    }
+    updateSuggestions('home');
+    return `🏦 <strong>Ahorro — ${mn}</strong><br><br>Ahorrado: <span style="color:var(--teal);font-weight:700">${f$(ts)}</span> <span style="color:var(--muted);font-size:12px">(${fU(ts)})</span><br>Tasa: <span style="color:${(ts/ti*100)>=20?'var(--green)':(ts/ti*100)>=10?'var(--amber)':'var(--red)'};font-weight:700">${ti>0?((ts/ti)*100).toFixed(1):'0'}%</span> de ingresos<br><br><span style="color:var(--muted);font-size:12px">Regla 50/30/20: necesidades / deseos / ahorro</span>`;
+  }
+
+  // ── TOP / RANKING ──
   if(n.includes('top')||n.includes('mas gast')||n.includes('ranking')||n.includes('en que gasto')){
-    if(!exp.length) return `No hay gastos en ${mn}. 🎉`;
+    if(!exp.length)return `No hay gastos en ${mn}. 🎉`;
     const grp=exp.reduce((a,t)=>{a[t.category]=(a[t.category]||0)+Number(t.amount);return a;},{});
     const top=Object.entries(grp).sort((a,b)=>b[1]-a[1]);
     const medal=['🥇','🥈','🥉'];
-    const topStr=top.map(([c,v],i)=>`${medal[i]||'  •'} ${c}: <span style="color:var(--red);font-weight:700">${fmtFull(v)}</span> (${(v/te*100).toFixed(0)}%)`).join('<br>');
-    return `🏆 <strong>Ranking — ${mn}</strong><br><br>${topStr}<br><br><span style="color:var(--muted);font-size:12px">Total: ${fmtFull(te)}</span>`;
+    const topStr=top.map(([c,v],i)=>`${medal[i]||'  •'} ${c}: <span style="color:var(--red);font-weight:700">${f$(v)}</span> (${(v/te*100).toFixed(0)}%)`).join('<br>');
+    updateSuggestions('gastos');
+    return `🏆 <strong>Ranking de gastos — ${mn}</strong><br><br>${topStr}<br><br><span style="color:var(--muted);font-size:12px">Total: ${f$(te)}</span>`;
   }
 
-  // Ingresos
-  if(n.includes('ingres')||n.includes('cobre')||n.includes('gane')){
-    if(!inc.length) return `No hay ingresos en ${mn}. 📭`;
-    const items=inc.map(t=>`  • ${t.description}: <span style="color:var(--green);font-weight:700">${fmtFull(Number(t.amount))}</span>`).join('<br>');
-    return `💵 <strong>Ingresos — ${mn}</strong><br><br>Total: <span style="color:var(--green);font-weight:700">${fmtFull(ti)}</span> (${fmtUSD(ti)})<br>${inc.length} registros<br><br>${items}`;
+  // ── COMPARAR MESES ──
+  if(n.includes('compar')||n.includes(' vs ')||n.includes('versus')){
+    const months=[];
+    for(const[name,idx]of Object.entries(MMAP)){if(n.includes(name)&&!months.includes(idx))months.push(idx);}
+    if(months.length>=2){
+      const[m1,m2]=months;
+      const t1=await getBotTxs(m1,curYear),t2=await getBotTxs(m2,curYear);
+      const e1=t1.filter(t=>t.type==='expense').reduce((s,t)=>s+Number(t.amount),0);
+      const e2=t2.filter(t=>t.type==='expense').reduce((s,t)=>s+Number(t.amount),0);
+      const i1=t1.filter(t=>t.type==='income').reduce((s,t)=>s+Number(t.amount),0);
+      const i2=t2.filter(t=>t.type==='income').reduce((s,t)=>s+Number(t.amount),0);
+      const s1=t1.filter(t=>t.type==='saving').reduce((s,t)=>s+Number(t.amount),0);
+      const s2=t2.filter(t=>t.type==='saving').reduce((s,t)=>s+Number(t.amount),0);
+      const diffE=e2-e1,pctE=e1>0?((diffE/e1)*100).toFixed(0):0;
+      const diffI=i2-i1,pctI=i1>0?((diffI/i1)*100).toFixed(0):0;
+      updateSuggestions('compare');
+      return `📊 <strong>${MONTHS[m1]} vs ${MONTHS[m2]} ${curYear}</strong><br><br>💵 Ingresos: ${f$(i1)} → ${f$(i2)} <span style="color:${diffI>=0?'var(--green)':'var(--red)'};font-weight:700">(${diffI>=0?'+':''}${pctI}%)</span><br>🔴 Gastos: ${f$(e1)} → ${f$(e2)} <span style="color:${diffE<=0?'var(--green)':'var(--red)'};font-weight:700">(${diffE>=0?'+':''}${pctE}%)</span><br>📈 Balance: ${f$(i1-e1)} → ${f$(i2-e2)}<br>🏦 Ahorro: ${f$(s1)} → ${f$(s2)}<br><br>${diffE>0?'⚠️ Subieron los gastos en '+MONTHS[m2]:'✅ Bajaron los gastos en '+MONTHS[m2]}`;
+    }
+    updateSuggestions('compare');
+    return 'Para comparar, decime dos meses. Ej: <em>"Comparame mayo vs junio"</em>';
   }
 
-  // Ahorro
-  if(n.includes('ahorr')){
-    return `🏦 <strong>Ahorro — ${mn}</strong><br><br>Ahorrado: <span style="color:var(--teal);font-weight:700">${fmtFull(ts)}</span> (${fmtUSD(ts)})<br>Tasa: ${ti>0?((ts/ti)*100).toFixed(1):'0'}% de ingresos`;
-  }
-
-  // Proyección
-  if(n.includes('proyecc')||n.includes('queda por dia')||n.includes('diario')||n.includes('margen')){
+  // ── PROYECCIÓN ──
+  if(n.includes('proyecc')||n.includes('margen')||n.includes('queda por dia')||n.includes('diario')||n.includes('ritmo')){
     const now=new Date();
     const dim=new Date(curYear,curMonth+1,0).getDate();
     const dom=(now.getMonth()===curMonth&&now.getFullYear()===curYear)?now.getDate():dim;
     const left=dim-dom;
     const daily=left>0?(ti-te)/left:0;
-    return `🔮 <strong>Proyección — ${mn}</strong><br><br>📅 Día ${dom} de ${dim} (${left} restantes)<br>📉 Gasto diario: <span style="color:var(--red)">${fmtFull(dom>0?te/dom:0)}</span>/día<br>🎯 Margen: <span style="color:${daily>=0?'var(--blue)':'var(--red)'};font-weight:700">${fmtFull(daily)}</span>/día<br><br>${daily>=0?'✅ Ritmo sostenible':'🚨 Cuidado, ritmo alto'}`;
+    const projE=dom>2?(te/dom)*dim:0;
+    const projB=ti-projE;
+    updateSuggestions('home');
+    return `🔮 <strong>Proyección — ${mn}</strong><br><br>📅 Día ${dom} de ${dim} (${left} restantes)<br>📉 Gasto diario actual: <span style="color:var(--red)">${f$(dom>0?te/dom:0)}</span>/día<br>🎯 Margen restante: <span style="color:${daily>=0?'var(--blue)':'var(--red)'};font-weight:700">${f$(daily)}</span>/día<br>📊 Gasto proyectado: <span style="color:var(--amber)">${f$(projE)}</span><br>📈 Balance proyectado: <span style="color:${projB>=0?'var(--green)':'var(--red)'}">${f$(projB)}</span> <span style="color:var(--muted);font-size:12px">(${fU(projB)})</span><br><br>${projE>ti?'🚨 Al ritmo actual, cerrás en rojo!':left>0?'✅ Ritmo sostenible.':'📋 Mes cerrado.'}`;
   }
 
-  // Tip
-  if(n.includes('tip')||n.includes('consejo')||n.includes('sugerencia')){
-    const pct=ti>0?(te/ti*100):0;
-    const tips=[];
-    if(pct>90)tips.push('🚨 Usás más del 90% del ingreso. Revisá gastos no esenciales.');
-    if(pct>70&&pct<=90)tips.push('⚠️ 70-90% de consumo. Intentá frenar gastos discrecionales.');
-    if(ts===0&&ti>0)tips.push('💡 No registraste ahorro este mes. La regla 50/30/20 sugiere ahorrar al menos 20%.');
-    if(pct<50)tips.push('🏆 Excelente control — usás menos del 50% de tus ingresos.');
-    if(!tips.length)tips.push('✨ Tus finanzas se ven estables. Seguí así.');
-    return `💡 <strong>Tip financiero</strong><br><br>${tips[Math.floor(Math.random()*tips.length)]}`;
+  // ── AYUDA ──
+  if(n.includes('ayuda')||n.includes('help')||n.includes('que podes')||n.includes('hola')||n.includes('menu')){
+    updateSuggestions('home');
+    return `🤖 <strong>¿Qué puedo hacer?</strong><br><br>📊 Consultas:<br>• "¿Cuánto gasté este mes?" / "¿Y en mayo?"<br>• "¿Cuánto en alimentación?" / "¿Y en nafta?"<br>• "¿Cuánto ingresé?" / "¿Cuánto de sueldo?"<br>• "¿Cuál es mi balance?"<br><br>🏆 Análisis:<br>• "¿En qué gasto más?" / "Ranking"<br>• "Comparame mayo vs junio"<br>• "¿Cómo van mis metas?"<br>• "¿Cuánto me queda por día?"<br><br>💡 Extras:<br>• "Dame un consejo"<br>• "¿Cuánto ahorré este año?"<br><br><span style="color:var(--muted);font-size:12px">⌨️ Ctrl+B para abrir/cerrar</span>`;
   }
 
-  // Ayuda
-  if(n.includes('ayuda')||n.includes('help')||n.includes('hola')||n.includes('que podes')){
-    return `🤖 <strong>¿Qué puedo hacer?</strong><br><br>• "¿Cuánto gasté?"<br>• "¿Cuál es mi balance?"<br>• "¿En qué gasto más?"<br>• "¿Cuánto me queda por día?"<br>• "¿Cuánto ahorré?"<br>• "Dame un consejo"<br><br><span style="color:var(--muted);font-size:12px">⌨️ Ctrl+B para abrir/cerrar</span>`;
+  // ── EASTER EGGS ──
+  if(n.includes('gracias')||n.includes('genial')||n.includes('crack')||n.includes('groso')){
+    return ['¡De nada! 😊 Para eso estoy.','¡Gracias a vos por cuidar tus finanzas! 💪','Me alegro. ¿Algo más? 🚀'][Math.floor(Math.random()*3)];
+  }
+  if(n.includes('chau')||n.includes('nos vemos')){
+    return '¡Hasta la próxima! 👋 Acordate de registrar tus gastos. 📝';
   }
 
-  // Gracias
-  if(n.includes('gracias')||n.includes('genial')||n.includes('crack')){
-    return ['¡De nada! 😊','¡Gracias a vos por cuidar tus finanzas! 💪','Me alegro. ¿Algo más? 🚀'][Math.floor(Math.random()*3)];
-  }
-
-  return `🤔 No entendí. Probá con: "balance", "gastos", "top gastos", "proyección" o "tip".<br><br>Escribí <strong>"ayuda"</strong> para ver todo.`;
+  // ── FALLBACK ──
+  updateSuggestions('home');
+  return `🤔 No entendí bien. Probá con:<br><br>• "¿Cuánto gasté en <strong>[categoría]</strong>?"<br>• "¿Cuál es mi balance?"<br>• "Comparame mayo vs junio"<br>• "Dame un consejo"<br><br>Escribí <strong>"ayuda"</strong> para ver todo.`;
 }
 
-// Ctrl+B para abrir/cerrar
+// Atajos
 document.addEventListener('keydown',e=>{
   if((e.ctrlKey||e.metaKey)&&e.key==='b'){e.preventDefault();toggleBot();}
   if(e.key==='Enter'&&document.activeElement?.id==='bot-input'){e.preventDefault();sendBot();}
