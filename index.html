@@ -1164,6 +1164,203 @@ async function renderHistorico(){
     </tr>`;
   }).join('');
 }
+  // ═══════════════════════════════════════════════════════════════════════════
+// BOT ENGINE v3.0 — SUPABASE VERSION
+// ═══════════════════════════════════════════════════════════════════════════
+
+let botOpen = false;
+
+function toggleBot(){
+  botOpen = !botOpen;
+  document.getElementById('bot-panel').classList.toggle('open', botOpen);
+  document.getElementById('bot-fab').classList.toggle('active', botOpen);
+  if(botOpen){
+    document.getElementById('bot-input').focus();
+    if(!document.getElementById('bot-messages').children.length) botWelcome();
+  }
+}
+
+function clearBotChat(){
+  document.getElementById('bot-messages').innerHTML = '';
+  botWelcome();
+}
+
+function botWelcome(){
+  const hour = new Date().getHours();
+  const saludo = hour < 12 ? 'Buen día' : hour < 19 ? 'Buenas tardes' : 'Buenas noches';
+  addBotMsg(`${saludo}, <strong>${userName}</strong>! 👋<br><br>Soy tu asistente financiero. Preguntame lo que quieras.<br><br><span style="color:var(--muted);font-size:12px;">Probá: "¿cuánto gasté?", "balance", "top gastos", "tip"</span>`, 'bot');
+  updateSuggestions();
+}
+
+function updateSuggestions(){
+  document.getElementById('bot-suggestions').innerHTML = [
+    ['💸 Gastos','¿Cuánto gasté?'],
+    ['📊 Balance','¿Cuál es mi balance?'],
+    ['🏆 Top','¿En qué gasto más?'],
+    ['🔮 Proyección','¿Cuánto me queda por día?'],
+    ['💡 Tip','Dame un consejo'],
+  ].map(([l,q])=>`<button class="bot-chip" onclick="botAsk('${q}')">${l}</button>`).join('');
+}
+
+function botAsk(text){ document.getElementById('bot-input').value=text; sendBot(); }
+
+function sendBot(){
+  const input=document.getElementById('bot-input');
+  const text=input.value.trim();
+  if(!text)return;
+  input.value='';
+  addBotMsg(text,'user');
+  const msgs=document.getElementById('bot-messages');
+  const typing=document.createElement('div');
+  typing.className='bot-msg bot-msg-bot';typing.id='bot-typing';
+  typing.innerHTML='<div class="bot-bubble"><div class="bot-typing"><span></span><span></span><span></span></div></div>';
+  msgs.appendChild(typing);msgs.scrollTop=msgs.scrollHeight;
+  setTimeout(async()=>{typing.remove();const r=await processBot(text);addBotMsg(r,'bot');},400+Math.random()*400);
+}
+
+function addBotMsg(html,type){
+  const msgs=document.getElementById('bot-messages');
+  const div=document.createElement('div');div.className=`bot-msg bot-msg-${type}`;
+  const now=new Date();const time=now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
+  div.innerHTML=`<div class="bot-bubble">${type==='user'?html.replace(/</g,'&lt;'):html}</div><div class="bot-time">${time}</div>`;
+  msgs.appendChild(div);msgs.scrollTop=msgs.scrollHeight;
+}
+
+async function processBot(text){
+  const n=text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[¿?¡!.,]/g,'');
+  const txs=cachedTxs;
+  const inc=txs.filter(t=>t.type==='income');
+  const exp=txs.filter(t=>t.type==='expense');
+  const sav=txs.filter(t=>t.type==='saving');
+  const ti=inc.reduce((s,t)=>s+Number(t.amount),0);
+  const te=exp.reduce((s,t)=>s+Number(t.amount),0);
+  const ts=sav.reduce((s,t)=>s+Number(t.amount),0);
+  const bal=ti-te;
+  const mn=MONTHS[curMonth]+' '+curYear;
+
+  // Balance
+  if(n.includes('balance')||n.includes('saldo')||(n.includes('como')&&n.includes('estoy'))){
+    return `📊 <strong>Balance — ${mn}</strong><br><br>💵 Ingresos: <span style="color:var(--green);font-weight:700">${fmtFull(ti)}</span><br>🔴 Gastos: <span style="color:var(--red);font-weight:700">${fmtFull(te)}</span><br>📈 Balance: <span style="color:${bal>=0?'var(--blue)':'var(--red)'};font-weight:700">${fmtFull(bal)}</span> (${fmtUSD(bal)})<br>🏦 Ahorro: <span style="color:var(--teal);font-weight:700">${fmtFull(ts)}</span><br><br>${bal>=0?'✅ Superávit':'⚠️ Déficit'}`;
+  }
+
+  // Gastos totales
+  if(n.includes('gast')||n.includes('cuanto llevo')){
+    if(!exp.length) return `No hay gastos en ${mn}. ✨`;
+    const grp=exp.reduce((a,t)=>{a[t.category]=(a[t.category]||0)+Number(t.amount);return a;},{});
+    const top=Object.entries(grp).sort((a,b)=>b[1]-a[1]).slice(0,6);
+    const topStr=top.map(([c,v])=>`  • ${c}: <span style="color:var(--red);font-weight:700">${fmtFull(v)}</span> (${(v/te*100).toFixed(0)}%)`).join('<br>');
+    return `🔴 <strong>Gastos — ${mn}</strong><br><br>Total: <span style="color:var(--red);font-weight:700">${fmtFull(te)}</span> (${fmtUSD(te)})<br>${exp.length} registros · Promedio: ${fmtFull(te/exp.length)}<br><br>🏆 Por categoría:<br>${topStr}`;
+  }
+
+  // Top/ranking
+  if(n.includes('top')||n.includes('mas gast')||n.includes('ranking')||n.includes('en que gasto')){
+    if(!exp.length) return `No hay gastos en ${mn}. 🎉`;
+    const grp=exp.reduce((a,t)=>{a[t.category]=(a[t.category]||0)+Number(t.amount);return a;},{});
+    const top=Object.entries(grp).sort((a,b)=>b[1]-a[1]);
+    const medal=['🥇','🥈','🥉'];
+    const topStr=top.map(([c,v],i)=>`${medal[i]||'  •'} ${c}: <span style="color:var(--red);font-weight:700">${fmtFull(v)}</span> (${(v/te*100).toFixed(0)}%)`).join('<br>');
+    return `🏆 <strong>Ranking — ${mn}</strong><br><br>${topStr}<br><br><span style="color:var(--muted);font-size:12px">Total: ${fmtFull(te)}</span>`;
+  }
+
+  // Ingresos
+  if(n.includes('ingres')||n.includes('cobre')||n.includes('gane')){
+    if(!inc.length) return `No hay ingresos en ${mn}. 📭`;
+    const items=inc.map(t=>`  • ${t.description}: <span style="color:var(--green);font-weight:700">${fmtFull(Number(t.amount))}</span>`).join('<br>');
+    return `💵 <strong>Ingresos — ${mn}</strong><br><br>Total: <span style="color:var(--green);font-weight:700">${fmtFull(ti)}</span> (${fmtUSD(ti)})<br>${inc.length} registros<br><br>${items}`;
+  }
+
+  // Ahorro
+  if(n.includes('ahorr')){
+    return `🏦 <strong>Ahorro — ${mn}</strong><br><br>Ahorrado: <span style="color:var(--teal);font-weight:700">${fmtFull(ts)}</span> (${fmtUSD(ts)})<br>Tasa: ${ti>0?((ts/ti)*100).toFixed(1):'0'}% de ingresos`;
+  }
+
+  // Proyección
+  if(n.includes('proyecc')||n.includes('queda por dia')||n.includes('diario')||n.includes('margen')){
+    const now=new Date();
+    const dim=new Date(curYear,curMonth+1,0).getDate();
+    const dom=(now.getMonth()===curMonth&&now.getFullYear()===curYear)?now.getDate():dim;
+    const left=dim-dom;
+    const daily=left>0?(ti-te)/left:0;
+    return `🔮 <strong>Proyección — ${mn}</strong><br><br>📅 Día ${dom} de ${dim} (${left} restantes)<br>📉 Gasto diario: <span style="color:var(--red)">${fmtFull(dom>0?te/dom:0)}</span>/día<br>🎯 Margen: <span style="color:${daily>=0?'var(--blue)':'var(--red)'};font-weight:700">${fmtFull(daily)}</span>/día<br><br>${daily>=0?'✅ Ritmo sostenible':'🚨 Cuidado, ritmo alto'}`;
+  }
+
+  // Tip
+  if(n.includes('tip')||n.includes('consejo')||n.includes('sugerencia')){
+    const pct=ti>0?(te/ti*100):0;
+    const tips=[];
+    if(pct>90)tips.push('🚨 Usás más del 90% del ingreso. Revisá gastos no esenciales.');
+    if(pct>70&&pct<=90)tips.push('⚠️ 70-90% de consumo. Intentá frenar gastos discrecionales.');
+    if(ts===0&&ti>0)tips.push('💡 No registraste ahorro este mes. La regla 50/30/20 sugiere ahorrar al menos 20%.');
+    if(pct<50)tips.push('🏆 Excelente control — usás menos del 50% de tus ingresos.');
+    if(!tips.length)tips.push('✨ Tus finanzas se ven estables. Seguí así.');
+    return `💡 <strong>Tip financiero</strong><br><br>${tips[Math.floor(Math.random()*tips.length)]}`;
+  }
+
+  // Ayuda
+  if(n.includes('ayuda')||n.includes('help')||n.includes('hola')||n.includes('que podes')){
+    return `🤖 <strong>¿Qué puedo hacer?</strong><br><br>• "¿Cuánto gasté?"<br>• "¿Cuál es mi balance?"<br>• "¿En qué gasto más?"<br>• "¿Cuánto me queda por día?"<br>• "¿Cuánto ahorré?"<br>• "Dame un consejo"<br><br><span style="color:var(--muted);font-size:12px">⌨️ Ctrl+B para abrir/cerrar</span>`;
+  }
+
+  // Gracias
+  if(n.includes('gracias')||n.includes('genial')||n.includes('crack')){
+    return ['¡De nada! 😊','¡Gracias a vos por cuidar tus finanzas! 💪','Me alegro. ¿Algo más? 🚀'][Math.floor(Math.random()*3)];
+  }
+
+  return `🤔 No entendí. Probá con: "balance", "gastos", "top gastos", "proyección" o "tip".<br><br>Escribí <strong>"ayuda"</strong> para ver todo.`;
+}
+
+// Ctrl+B para abrir/cerrar
+document.addEventListener('keydown',e=>{
+  if((e.ctrlKey||e.metaKey)&&e.key==='b'){e.preventDefault();toggleBot();}
+  if(e.key==='Enter'&&document.activeElement?.id==='bot-input'){e.preventDefault();sendBot();}
+});
 </script>
+  <button id="bot-fab" onclick="toggleBot()">💬</button>
+<div id="bot-panel">
+  <div class="bot-header">
+    <div class="bot-header-left"><div class="bot-avatar">🤖</div><div><div class="bot-name">Asistente Financiero</div><div class="bot-status">● Conectado</div></div></div>
+    <div style="display:flex;gap:6px"><button class="bot-close" onclick="clearBotChat()">🗑</button><button class="bot-close" onclick="toggleBot()">✕</button></div>
+  </div>
+  <div class="bot-messages" id="bot-messages"></div>
+  <div class="bot-suggestions" id="bot-suggestions"></div>
+  <div class="bot-input-row"><input type="text" id="bot-input" class="bot-input" placeholder="Preguntá algo..." autocomplete="off"><button class="bot-send" onclick="sendBot()">➤</button></div>
+</div>
+<style>
+#bot-fab{position:fixed;bottom:24px;right:24px;width:58px;height:58px;border-radius:50%;background:linear-gradient(135deg,var(--blue),var(--teal));border:none;font-size:24px;cursor:pointer;box-shadow:0 6px 24px rgba(59,158,255,.4);z-index:200;display:flex;align-items:center;justify-content:center;}
+#bot-fab:hover{transform:scale(1.1);}
+#bot-fab.active{transform:scale(0);opacity:0;pointer-events:none;}
+#bot-panel{position:fixed;bottom:24px;right:24px;width:380px;max-width:calc(100vw - 32px);height:520px;max-height:calc(100vh - 100px);background:var(--bg1);border:1px solid var(--border);border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.6);z-index:201;display:flex;flex-direction:column;transform:scale(.9) translateY(20px);opacity:0;pointer-events:none;transition:all .3s cubic-bezier(.16,1,.3,1);}
+#bot-panel.open{transform:none;opacity:1;pointer-events:all;}
+.bot-header{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--border);background:var(--bg2);border-radius:16px 16px 0 0;}
+.bot-header-left{display:flex;align-items:center;gap:10px;}
+.bot-avatar{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--blue),var(--purple));display:flex;align-items:center;justify-content:center;font-size:16px;}
+.bot-name{font-size:13px;font-weight:700;color:var(--text);}
+.bot-status{font-size:10px;color:var(--green);}
+.bot-close{background:none;border:none;color:var(--soft);font-size:14px;cursor:pointer;padding:4px 6px;border-radius:6px;}
+.bot-close:hover{color:var(--text);background:var(--bg3);}
+.bot-messages{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:8px;}
+.bot-msg{display:flex;flex-direction:column;animation:fadeIn .3s ease;}
+.bot-msg-user{align-items:flex-end;}
+.bot-msg-bot{align-items:flex-start;}
+.bot-bubble{max-width:85%;padding:10px 14px;border-radius:12px;font-size:13px;line-height:1.6;word-break:break-word;}
+.bot-msg-user .bot-bubble{background:linear-gradient(135deg,var(--blue),#2d8cf0);color:#fff;border-bottom-right-radius:4px;}
+.bot-msg-bot .bot-bubble{background:var(--bg2);border:1px solid var(--border);color:var(--text);border-bottom-left-radius:4px;}
+.bot-time{font-size:10px;color:var(--muted);margin-top:2px;padding:0 4px;}
+.bot-suggestions{display:flex;flex-wrap:wrap;gap:6px;padding:8px 14px;border-top:1px solid var(--border);background:var(--bg2);}
+.bot-chip{font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;padding:5px 10px;border-radius:99px;border:1px solid var(--border);background:var(--bg);color:var(--text2);cursor:pointer;transition:all .2s;white-space:nowrap;}
+.bot-chip:hover{border-color:var(--blue);color:var(--text);}
+.bot-input-row{display:flex;gap:8px;padding:10px 14px;border-top:1px solid var(--border);background:var(--bg2);border-radius:0 0 16px 16px;}
+.bot-input{flex:1;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:var(--bg);border:1px solid var(--border);color:var(--text);border-radius:8px;outline:none;}
+.bot-input:focus{border-color:var(--blue);}
+.bot-input::placeholder{color:var(--muted);}
+.bot-send{width:36px;height:36px;border-radius:8px;background:linear-gradient(135deg,var(--blue),var(--teal));border:none;color:#fff;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.bot-send:hover{transform:scale(1.05);}
+.bot-typing{display:flex;gap:4px;padding:4px 0;}
+.bot-typing span{width:6px;height:6px;border-radius:50%;background:var(--soft);animation:bTyping 1.2s infinite;}
+.bot-typing span:nth-child(2){animation-delay:.2s}
+.bot-typing span:nth-child(3){animation-delay:.4s}
+@keyframes bTyping{0%,100%{opacity:.3;transform:translateY(0)}50%{opacity:1;transform:translateY(-4px)}}
+@media(max-width:480px){#bot-panel{bottom:0;right:0;width:100%;max-width:100%;height:100vh;max-height:100vh;border-radius:0;}}
+</style>
 </body>
 </html>
