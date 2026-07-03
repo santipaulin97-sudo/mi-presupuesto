@@ -209,7 +209,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 <body>
 <div id="toast-container"></div>
 
-<div id="setup-screen" class="auth-screen">
+<div id="setup-screen" class="auth-screen" style="display:none">
   <div class="auth-box">
     <span class="auth-emoji">💰</span>
     <div class="auth-title">Mi Presupuesto</div>
@@ -686,33 +686,41 @@ async function checkGoalAlerts(cat){
 // ════════════ PIN / AUTH ════════════════════════════════════════════════════
 window.onload = async function(){
   document.getElementById('month-label').textContent = MONTHS[curMonth]+' '+curYear;
-  // Verificar si hay perfil guardado en sessionStorage
-  const savedId = sessionStorage.getItem('budget_profile_id');
-  if (savedId) {
-    const { data: profile } = await db.from('budget_profiles').select('*').eq('id', savedId).single();
-    if (profile) {
-      profileId = profile.id;
-      userName = profile.username;
-      tc = Number(profile.tc) || 1450;
+  
+  // Todo oculto mientras carga
+  document.getElementById('setup-screen').style.display = 'none';
+  document.getElementById('pin-screen').style.display = 'none';
+  
+  try {
+    // Verificar si hay perfil guardado en sessionStorage
+    const savedId = sessionStorage.getItem('budget_profile_id');
+    if (savedId) {
+      const { data: profile } = await db.from('budget_profiles').select('*').eq('id', savedId).single();
+      if (profile) {
+        profileId = profile.id;
+        userName = profile.username;
+        tc = Number(profile.tc) || 1450;
+        document.getElementById('tc-input').value = tc;
+        document.getElementById('pin-screen').style.display = 'flex';
+        document.getElementById('pin-greeting').textContent = 'Hola, '+userName+' 👋';
+        return;
+      }
+    }
+    // Verificar si existe algún perfil
+    const { data: profiles } = await db.from('budget_profiles').select('*').limit(1);
+    if (profiles && profiles.length > 0) {
+      const p = profiles[0];
+      profileId = p.id;
+      userName = p.username;
+      tc = Number(p.tc) || 1450;
       document.getElementById('tc-input').value = tc;
-      document.getElementById('setup-screen').style.display = 'none';
       document.getElementById('pin-screen').style.display = 'flex';
       document.getElementById('pin-greeting').textContent = 'Hola, '+userName+' 👋';
-      return;
+    } else {
+      document.getElementById('setup-screen').style.display = 'flex';
     }
-  }
-  // Verificar si existe algún perfil
-  const { data: profiles } = await db.from('budget_profiles').select('*').limit(1);
-  if (profiles && profiles.length > 0) {
-    const p = profiles[0];
-    profileId = p.id;
-    userName = p.username;
-    tc = Number(p.tc) || 1450;
-    document.getElementById('tc-input').value = tc;
-    document.getElementById('setup-screen').style.display = 'none';
-    document.getElementById('pin-screen').style.display = 'flex';
-    document.getElementById('pin-greeting').textContent = 'Hola, '+userName+' 👋';
-  } else {
+  } catch(e) {
+    // Si falla Supabase, mostrar setup como fallback
     document.getElementById('setup-screen').style.display = 'flex';
   }
 };
