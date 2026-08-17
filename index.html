@@ -203,6 +203,14 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   .kpi-value{font-size:20px;}
   .charts-grid{grid-template-columns:1fr;}
   .proj-grid{grid-template-columns:1fr 1fr;}
+
+  /* Fix tabla Histórico */
+  #tab-historico table{font-size:11px;}
+  #tab-historico th, #tab-historico td{padding:8px 7px !important;}
+
+  /* Fix gráficos Histórico */
+  #tab-historico .chart-wrap[style*="250px"]{height:180px !important;}
+  #tab-historico .chart-wrap[style*="190px"]{height:140px !important;}
 }
 </style>
 </head>
@@ -212,7 +220,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 <div id="setup-screen" class="auth-screen" style="display:none">
   <div class="auth-box">
     <span class="auth-emoji">💰</span>
-    <div class="auth-title">Mi Presupuesto</div>
+    <div class="auth-title">Mis Finanzas</div>
     <div class="auth-sub">Creá tu perfil personal. Tu PIN de 4 dígitos protegerá el acceso.</div>
     <input id="setup-name" class="auth-input" type="text" placeholder="Tu nombre..." maxlength="30" onkeydown="if(event.key==='Enter')document.getElementById('setup-pin1').focus()">
     <input id="setup-pin1" class="auth-input" type="password" inputmode="numeric" maxlength="4" placeholder="PIN de 4 dígitos" onkeydown="if(event.key==='Enter')document.getElementById('setup-pin2').focus()">
@@ -252,7 +260,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 
 <div id="app-screen">
   <header class="app-header">
-    <div class="header-brand">Mi <span>Presupuesto</span></div>
+    <div class="header-brand">Mis <span>Finanzas</span></div>
     <div class="header-right">
       <div class="tc-group">
         <span class="tc-label">USD 1 =</span>
