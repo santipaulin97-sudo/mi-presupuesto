@@ -198,16 +198,20 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 @keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-8px)}40%,80%{transform:translateX(8px)}}
 
 @media(max-width:600px){
+  html{font-size:13px;}
   .app-header{padding:12px 14px;}
-  .content{padding:20px 12px 50px;}
-  .kpi-value{font-size:20px;}
+  .header-brand{font-size:16px;}
+  .tc-input{width:72px;}
+  .user-chip{display:none;}
+  .tab-btn{padding:10px 12px;font-size:12px;}
+  .month-label{font-size:18px;min-width:160px;}
+  .content{padding:16px 10px 50px;}
+  .kpi-value{font-size:18px;}
   .charts-grid{grid-template-columns:1fr;}
   .proj-grid{grid-template-columns:1fr 1fr;}
-
   /* Fix tabla Histórico */
   #tab-historico table{font-size:11px;}
   #tab-historico th, #tab-historico td{padding:8px 7px !important;}
-
   /* Fix gráficos Histórico */
   #tab-historico .chart-wrap[style*="250px"]{height:180px !important;}
   #tab-historico .chart-wrap[style*="190px"]{height:140px !important;}
