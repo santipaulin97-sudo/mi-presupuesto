@@ -1294,10 +1294,19 @@ const CALIAS={
 
 function detectMonth(text){
   const n=norm(text);
-  if(n.includes('este mes')||n.includes('mes actual'))return{m:curMonth,y:curYear};
-  if(n.includes('mes pasado')||n.includes('mes anterior')){let m=curMonth-1,y=curYear;if(m<0){m=11;y--;}return{m,y};}
-  for(const[name,idx]of Object.entries(MMAP)){if(n.includes(name))return{m:idx,y:curYear};}
-  return{m:curMonth,y:curYear};
+  const now=new Date();
+  // Por defecto: mes calendario REAL, no el que está navegado en el dashboard
+  if(n.includes('este mes')||n.includes('mes actual')||n.includes('mes en curso'))
+    return{m:now.getMonth(),y:now.getFullYear()};
+  if(n.includes('mes pasado')||n.includes('mes anterior')){
+    let m=now.getMonth()-1,y=now.getFullYear();if(m<0){m=11;y--;}return{m,y};
+  }
+  for(const[name,idx]of Object.entries(MMAP)){
+    const re=new RegExp('\\b'+name+'\\b');
+    if(re.test(n))return{m:idx,y:now.getFullYear()};
+  }
+  // Default: mes calendario real actual, no curMonth del dashboard
+  return{m:now.getMonth(),y:now.getFullYear()};
 }
 
 function detectCat(text){
@@ -1308,7 +1317,8 @@ function detectCat(text){
 }
 
 async function getBotTxs(m,y){
-  if(m===curMonth&&y===curYear) return cachedTxs;
+  const now=new Date();
+  if(m===now.getMonth()&&y===now.getFullYear()&&m===curMonth&&y===curYear) return cachedTxs;
   return await loadTxs(m,y);
 }
 
@@ -1379,13 +1389,15 @@ async function processBot(text){
   }
 
   // ── GASTO POR CATEGORÍA ──
-  if(cat&&(n.includes('gast')||n.includes('cuanto')||n.includes('pague'))){
+    if(cat&&(n.includes('gast')||n.includes('cuanto')||n.includes('pague'))){
     const ce=exp.filter(t=>t.category===cat);
     const ct=ce.reduce((s,t)=>s+Number(t.amount),0);
     if(!ce.length)return `No tenés gastos en <strong>${cat}</strong> para ${mn}. 📭`;
     const pct=te>0?((ct/te)*100).toFixed(1):'0';
-    const items=ce.slice(0,8).map(t=>`  • ${t.description}: <span style="color:var(--red);font-weight:700">${f$(Number(t.amount))}</span>`).join('<br>');
-    const more=ce.length>8?`<br><span style="color:var(--muted);font-size:12px">...y ${ce.length-8} más</span>`:'';
+    const pideDetalle = n.includes('detalle')||n.includes('detallado')||n.includes('todos')||n.includes('todas')||n.includes('lista')||n.includes('completo');
+    const lista = pideDetalle ? ce : ce.slice(0,8);
+    const items=lista.map(t=>`  • ${t.description}: <span style="color:var(--red);font-weight:700">${f$(Number(t.amount))}</span>`).join('<br>');
+    const more=(!pideDetalle&&ce.length>8)?`<br><span style="color:var(--muted);font-size:12px">...y ${ce.length-8} más (pedí "detallado" para verlos todos)</span>`:'';
     botContext.lastCat=cat;
     updateSuggestions('gastos');
     return `📂 <strong>${cat}</strong> — ${mn}<br><br>💰 Total: <span style="color:var(--red);font-weight:700">${f$(ct)}</span> <span style="color:var(--muted);font-size:12px">(${pct}% del gasto, ${fU(ct)})</span><br>📝 ${ce.length} registro${ce.length>1?'s':''}:<br>${items}${more}`;
@@ -1401,22 +1413,36 @@ async function processBot(text){
     return `💵 <strong>${cat}</strong> — ${mn}<br><br>Total: <span style="color:var(--green);font-weight:700">${f$(ct)}</span> <span style="color:var(--muted);font-size:12px">(${fU(ct)})</span><br>${items}`;
   }
 
-  // ── TOTAL GASTOS ──
-  if(n.includes('gast')||n.includes('cuanto llevo')){
-    if(!exp.length)return `No hay gastos en ${mn}. ✨`;
+  // ── TOTAL GASTOS (RESUMEN VS ÍTEM POR ÍTEM) ──
+  if(n.includes('gast')||n.includes('cuanto llevo')||n.includes('pague')){
+    if(!exp.length)return `No hay gastos registrados en <strong>${mn}</strong>. ✨`;
+    
+    const pideDetalle = n.includes('detalle')||n.includes('detallado')||n.includes('todos')||n.includes('todas')||n.includes('lista')||n.includes('completo')||n.includes('pasame')||n.includes('dame');
+    
+    // Si pide detalle explícito, muestra la lista completa de ítems individuales
+    if(pideDetalle){
+      const items=exp.map(t=>`  • ${t.description} <span style="color:var(--muted)">(${t.category})</span>: <span style="color:var(--red);font-weight:700">${f$(Number(t.amount))}</span>`).join('<br>');
+      updateSuggestions('gastos');
+      return `🔴 <strong>Todos los Gastos (${exp.length})</strong> — ${mn}<br><br>💰 Total: <span style="color:var(--red);font-weight:700">${f$(te)}</span><br><br>📋 <strong>Desglose ítem por ítem:</strong><br>${items}`;
+    }
+
+    // Si es una pregunta general, muestra el resumen por categoría
     const grp=exp.reduce((a,t)=>{a[t.category]=(a[t.category]||0)+Number(t.amount);return a;},{});
-    const top=Object.entries(grp).sort((a,b)=>b[1]-a[1]).slice(0,6);
+    const top=Object.entries(grp).sort((a,b)=>b[1]-a[1]);
     const topStr=top.map(([c,v])=>`  • ${c}: <span style="color:var(--red);font-weight:700">${f$(v)}</span> (${(v/te*100).toFixed(0)}%)`).join('<br>');
     updateSuggestions('gastos');
-    return `🔴 <strong>Gastos — ${mn}</strong><br><br>Total: <span style="color:var(--red);font-weight:700">${f$(te)}</span> <span style="color:var(--muted);font-size:12px">(${fU(te)})</span><br>${exp.length} transacciones · Promedio: ${f$(te/exp.length)}<br><br>🏆 Por categoría:<br>${topStr}`;
+    return `🔴 <strong>Gastos por Categoría</strong> — ${mn}<br><br>Total: <span style="color:var(--red);font-weight:700">${f$(te)}</span> (${exp.length} registros)<br><br>🏆 Categorías principales:<br>${topStr}<br><br><span style="color:var(--muted);font-size:12px">💡 Para ver ítem por ítem decime: "Pasame todos los gastos detallados".</span>`;
   }
 
-  // ── TOTAL INGRESOS ──
-  if(n.includes('ingres')||n.includes('cobre')||n.includes('gane')){
-    if(!inc.length)return `No hay ingresos en ${mn}. 📭`;
-    const items=inc.map(t=>`  • ${t.description} (${t.category}): <span style="color:var(--green);font-weight:700">${f$(Number(t.amount))}</span>`).join('<br>');
+ // ── TOTAL INGRESOS ──
+  if(n.includes('ingres')||n.includes('cobre')||n.includes('gane')||n.includes('sueldo')){
+    if(!inc.length)return `No hay ingresos registrados en <strong>${mn}</strong>. 📭`;
+    const pideDetalle = n.includes('detalle')||n.includes('detallado')||n.includes('todos')||n.includes('todas')||n.includes('lista')||n.includes('completo')||n.includes('pasame')||n.includes('dame');
+    const lista = pideDetalle ? inc : inc.slice(0,8);
+    const items=lista.map(t=>`  • ${t.description} <span style="color:var(--muted)">(${t.category})</span>: <span style="color:var(--green);font-weight:700">${f$(Number(t.amount))}</span>`).join('<br>');
+    const more=(!pideDetalle&&inc.length>8)?`<br><span style="color:var(--muted);font-size:12px">...y ${inc.length-8} más (pedí "detallado" para verlos todos)</span>`:'';
     updateSuggestions('home');
-    return `💵 <strong>Ingresos — ${mn}</strong><br><br>Total: <span style="color:var(--green);font-weight:700">${f$(ti)}</span> <span style="color:var(--muted);font-size:12px">(${fU(ti)})</span><br>${inc.length} registro${inc.length>1?'s':''}<br><br>${items}`;
+    return `💵 <strong>Ingresos</strong> — ${mn}<br><br>Total: <span style="color:var(--green);font-weight:700">${f$(ti)}</span> (${inc.length} registros)<br><br>📋 <strong>Registros:</strong><br>${items}${more}`;
   }
 
   // ── AHORRO ──
