@@ -269,7 +269,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
       <div class="tc-group">
         <span class="tc-label">USD 1 =</span>
         <span class="tc-prefix">$</span>
-        <input id="tc-input" class="tc-input" type="number" value="1450" oninput="updateTC(this.value)">
+        <input id="tc-input" class="tc-input" type="tel" inputmode="numeric" value="1450" oninput="updateTC(this.value)">
       </div>
       <button class="header-icon-btn" id="eye-btn" onclick="toggleHide()" title="Ocultar montos">👁</button>
       <div class="user-chip" id="user-chip">👤</div>
@@ -390,7 +390,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
           </div>
           <div class="form-group" style="flex:1 1 120px">
             <label>Monto (ARS)</label>
-            <input id="inc-amt" class="f-inp" type="number" placeholder="0" min="0">
+            <input id="inc-amt" class="f-inp" type="tel" inputmode="numeric" placeholder="0" min="0">
           </div>
           <button class="add-btn btn-income" onclick="addTx('income')">+ Ingreso</button>
         </div>
@@ -451,7 +451,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
           </div>
           <div class="form-group" style="flex:1 1 120px">
             <label>Monto (ARS)</label>
-            <input id="exp-amt" class="f-inp" type="number" placeholder="0" min="0">
+            <input id="exp-amt" class="f-inp" type="tel" inputmode="numeric" placeholder="0" min="0">
           </div>
           <button class="add-btn btn-expense" onclick="addTx('expense')">+ Gasto</button>
         </div>
@@ -498,7 +498,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
         <div class="saving-goal-row">
           <div class="form-group" style="flex:2 1 200px">
             <label>Meta de ahorro (ARS)</label>
-            <input id="saving-goal-inp" class="f-inp" type="number" placeholder="Ej: 200000" min="0">
+           <input id="saving-goal-inp" class="f-inp" type="tel" inputmode="numeric" placeholder="Ej: 200000" min="0">
           </div>
           <button class="add-btn btn-teal" onclick="saveSavingGoal()">Guardar Meta</button>
         </div>
@@ -539,7 +539,7 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
           </div>
           <div class="form-group" style="flex:1 1 120px">
             <label>Monto (ARS)</label>
-            <input id="sav-amt" class="f-inp" type="number" placeholder="0" min="0">
+            <input id="sav-amt" class="f-inp" type="tel" inputmode="numeric" placeholder="0" min="0">
           </div>
           <button class="add-btn btn-teal" onclick="addSaving()">+ Ahorro</button>
         </div>
@@ -942,7 +942,7 @@ async function renderGoals(expGrp){
       </div>
       ${budget?`<div class="goal-prog-track"><div class="goal-prog-fill" style="width:${pct}%;background:${fc}"></div></div>`:`<div class="goal-no-budget">Sin meta definida</div>`}
       <div class="goal-input-row">
-        <input id="goal-inp-${cat}" class="goal-input" type="number" placeholder="Meta ARS..." value="${budget||''}" onkeydown="if(event.key==='Enter')saveGoal('${cat}')">
+        <input id="goal-inp-${cat}" class="goal-input" type="tel" inputmode="numeric" placeholder="Meta ARS..." value="${budget||''}" onkeydown="if(event.key==='Enter')saveGoal('${cat}')">
         <button class="goal-save-btn" onclick="saveGoal('${cat}')">Guardar</button>
         ${budget?`<button class="goal-clear-btn" onclick="clearGoal('${cat}')" title="Quitar meta">✕</button>`:''}
       </div>
