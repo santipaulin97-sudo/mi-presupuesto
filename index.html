@@ -151,6 +151,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
 
 /* Charts */
 .charts-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;margin-bottom:24px;}
+#tab-dashboard .charts-grid,
+#tab-historico .charts-grid{grid-template-columns:repeat(2,minmax(0,1fr));}
+#tab-historico .chart-card{grid-column:auto !important;}
+#tab-historico .chart-wrap{height:210px !important;}
 .chart-card{background:var(--bg2);border-radius:var(--r);padding:20px;border:1px solid var(--border);}
 .chart-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);margin-bottom:14px;}
 .chart-wrap{position:relative;height:210px;}
@@ -209,7 +213,6 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   .month-label{font-size:18px;min-width:160px;}
   .content{padding:16px 10px 50px;}
   .kpi-value{font-size:18px;}
-  .charts-grid{grid-template-columns:1fr;}
   .proj-grid{grid-template-columns:1fr 1fr;}
   /* Fix tabla Histórico */
   #tab-historico table{font-size:11px;}
@@ -217,6 +220,10 @@ body{font-family:'DM Sans',sans-serif;background:var(--bg);color:var(--text);min
   /* Fix gráficos Histórico */
   #tab-historico .chart-wrap[style*="250px"]{height:180px !important;}
   #tab-historico .chart-wrap[style*="190px"]{height:140px !important;}
+}
+@media(max-width:480px){
+  #tab-dashboard .charts-grid,
+  #tab-historico .charts-grid{grid-template-columns:1fr;}
 }
 </style>
 </head>
