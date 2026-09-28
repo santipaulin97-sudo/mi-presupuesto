@@ -1273,8 +1273,25 @@ function addBotMsg(html,type){
   const msgs=document.getElementById('bot-messages');
   const div=document.createElement('div');div.className=`bot-msg bot-msg-${type}`;
   const now=new Date();const time=now.getHours().toString().padStart(2,'0')+':'+now.getMinutes().toString().padStart(2,'0');
-  div.innerHTML=`<div class="bot-bubble">${type==='user'?html.replace(/</g,'&lt;'):html}</div><div class="bot-time">${time}</div>`;
+  const content=type==='user'?html.replace(/</g,'&lt;'):html;
+  const copyBtn=type==='bot'?'<button class="bot-copy-btn" type="button" title="Copiar respuesta" aria-label="Copiar respuesta" onclick="copyBotMsg(this)">⧉</button>':'';
+  div.innerHTML=`<div class="bot-bubble"><div class="bot-copy-content">${content}</div>${copyBtn}</div><div class="bot-time">${time}</div>`;
   msgs.appendChild(div);msgs.scrollTop=msgs.scrollHeight;
+}
+
+async function copyBotMsg(button){
+  const content=button.closest('.bot-bubble')?.querySelector('.bot-copy-content');
+  if(!content)return;
+  const text=content.innerText.trim();
+  try{
+    await navigator.clipboard.writeText(text);
+  }catch{
+    const area=document.createElement('textarea');
+    area.value=text;area.style.position='fixed';area.style.opacity='0';
+    document.body.appendChild(area);area.select();document.execCommand('copy');area.remove();
+  }
+  button.textContent='✓';button.classList.add('copied');button.setAttribute('aria-label','Respuesta copiada');
+  setTimeout(()=>{button.textContent='⧉';button.classList.remove('copied');button.setAttribute('aria-label','Copiar respuesta');},1600);
 }
 
 // ── NLP HELPERS ──
@@ -1573,7 +1590,10 @@ document.addEventListener('keydown',e=>{
 .bot-msg-bot{align-items:flex-start;}
 .bot-bubble{max-width:85%;padding:10px 14px;border-radius:12px;font-size:13px;line-height:1.6;word-break:break-word;}
 .bot-msg-user .bot-bubble{background:linear-gradient(135deg,var(--blue),#2d8cf0);color:#fff;border-bottom-right-radius:4px;}
-.bot-msg-bot .bot-bubble{background:var(--bg2);border:1px solid var(--border);color:var(--text);border-bottom-left-radius:4px;}
+.bot-msg-bot .bot-bubble{position:relative;padding-right:42px;background:var(--bg2);border:1px solid var(--border);color:var(--text);border-bottom-left-radius:4px;}
+.bot-copy-btn{position:absolute;top:8px;right:8px;width:26px;height:26px;border:1px solid transparent;border-radius:7px;background:transparent;color:var(--soft);font-size:17px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .2s;}
+.bot-copy-btn:hover,.bot-copy-btn:focus-visible{color:var(--text);background:var(--bg3);border-color:var(--border);outline:none;}
+.bot-copy-btn.copied{color:var(--green);background:rgba(0,229,160,.1);border-color:rgba(0,229,160,.25);}
 .bot-time{font-size:10px;color:var(--muted);margin-top:2px;padding:0 4px;}
 .bot-suggestions{display:flex;flex-wrap:wrap;gap:6px;padding:8px 14px;border-top:1px solid var(--border);background:var(--bg2);}
 .bot-chip{font-family:'DM Sans',sans-serif;font-size:11px;font-weight:600;padding:5px 10px;border-radius:99px;border:1px solid var(--border);background:var(--bg);color:var(--text2);cursor:pointer;transition:all .2s;white-space:nowrap;}
